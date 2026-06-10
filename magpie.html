@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#131419">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Magpie">
+<title>Magpie — X video grabber</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #131419;
+    --panel: #1b1d24;
+    --panel-2: #20232c;
+    --line: #2a2d36;
+    --text: #e9e7e2;
+    --dim: #8b8e98;
+    --amber: #e8b14e;
+    --amber-dim: #7a5e2a;
+    --good: #8fc98f;
+    --bad: #d98080;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--ink);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100dvh;
+    padding: max(28px, env(safe-area-inset-top)) 18px calc(40px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .wrap { width: 100%; max-width: 540px; }
+
+  /* ---- header ---- */
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 26px;
+  }
+  .mark {
+    width: 13px; height: 13px;
+    background: linear-gradient(135deg, var(--amber) 50%, #4d5260 50%);
+    transform: rotate(45deg) translateY(1px);
+    flex: none;
+  }
+  h1 {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  header span {
+    color: var(--dim);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    margin-left: auto;
+  }
+
+  /* ---- input ---- */
+  .field {
+    display: flex;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color .15s;
+  }
+  .field:focus-within { border-color: var(--amber-dim); }
+  .field input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 15px 14px;
+  }
+  .field input::placeholder { color: #565a64; }
+  .field button {
+    background: var(--amber);
+    color: #1d1605;
+    border: none;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0 18px;
+    cursor: pointer;
+  }
+  .field button:active { filter: brightness(0.88); }
+  .hint {
+    color: var(--dim);
+    font-size: 12px;
+    margin-top: 10px;
+    line-height: 1.5;
+  }
+
+  /* ---- status ---- */
+  #status {
+    margin-top: 18px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--dim);
+    min-height: 18px;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  #status.err { color: var(--bad); }
+  #status.ok { color: var(--good); }
+
+  /* ---- result card ---- */
+  .card {
+    margin-top: 18px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+  }
+  .filament {
+    position: absolute;
+    top: 0; left: 0;
+    height: 2px;
+    width: 0%;
+    background: var(--amber);
+    transition: width .12s linear;
+  }
+  .tweet {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tweet img.thumb {
+    width: 86px; height: 86px;
+    object-fit: cover;
+    border-radius: 8px;
+    background: var(--panel-2);
+    flex: none;
+  }
+  .tweet .meta { min-width: 0; }
+  .tweet .who { font-weight: 600; font-size: 14px; }
+  .tweet .who em {
+    font-style: normal; font-weight: 500;
+    color: var(--dim); font-size: 12.5px;
+    margin-left: 6px;
+  }
+  .tweet .txt {
+    color: var(--dim);
+    font-size: 12.5px;
+    line-height: 1.45;
+    margin-top: 5px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .items { padding: 6px 0; }
+  .group-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+    padding: 10px 14px 4px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .row + .row { border-top: 1px solid #21242c; }
+  .row .res { min-width: 86px; }
+  .row .info { color: var(--dim); font-size: 11.5px; flex: 1; }
+  .row .acts { display: flex; gap: 8px; }
+  .row button, .row a.btn {
+    font-family: var(--sans);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    border-radius: 7px;
+    padding: 7px 12px;
+    cursor: pointer;
+    text-decoration: none;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .row button.primary {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: #1d1605;
+    font-weight: 700;
+  }
+  .row button:active, .row a.btn:active { filter: brightness(0.85); }
+  .row button[disabled] { opacity: .45; pointer-events: none; }
+
+  footer {
+    margin-top: auto;
+    padding-top: 36px;
+    color: #50535d;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    text-align: center;
+    line-height: 1.6;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .filament { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark"></div>
+    <h1>Magpie</h1>
+    <span>X / Twitter video grabber</span>
+  </header>
+
+  <div class="field">
+    <input id="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off"
+           spellcheck="false" placeholder="paste a tweet link…" enterkeyhint="go">
+    <button id="go">Fetch</button>
+  </div>
+  <p class="hint">Paste auto-fetches. Works with x.com, twitter.com and mobile share links. Videos, GIFs and photos.</p>
+
+  <div id="status"></div>
+  <div id="result"></div>
+</div>
+
+<footer>client-side only · resolves via fxtwitter / vxtwitter public APIs<br>private, deleted or age-gated posts can’t be fetched</footer>
+
+<script>
+"use strict";
+
+const $url = document.getElementById("url");
+const $go = document.getElementById("go");
+const $status = document.getElementById("status");
+const $result = document.getElementById("result");
+
+function setStatus(msg, cls) {
+  $status.textContent = msg || "";
+  $status.className = cls || "";
+}
+
+function extractId(text) {
+  if (!text) return null;
+  let m = text.match(/(?:twitter\.com|x\.com|vxtwitter\.com|fxtwitter\.com|fixupx\.com|nitter\.[^/]+)\/(?:[^/]+)\/status(?:es)?\/(\d{1,25})/i);
+  if (m) return m[1];
+  m = text.trim().match(/^(\d{8,25})$/);   // bare numeric ID
+  return m ? m[1] : null;
+}
+
+/* ---------- resolvers ---------- */
+
+async function getJSON(url) {
+  const r = await fetch(url, { headers: { "Accept": "application/json" } });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+// normalised shape: { author, handle, text, items:[{kind:'video'|'gif'|'photo', thumb, variants:[{url,label,info}]}] }
+async function resolveFx(id) {
+  const d = await getJSON("https://api.fxtwitter.com/status/" + id);
+  if (!d.tweet) throw new Error(d.message || "no tweet");
+  const t = d.tweet;
+  const items = [];
+  const media = t.media || {};
+  for (const v of (media.videos || [])) {
+    const variants = (v.variants || [])
+      .filter(x => /mp4/i.test(x.content_type || "") && x.url)
+      .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
+      .map(x => ({
+        url: x.url,
+        label: resFromUrl(x.url) || (x.bitrate ? Math.round(x.bitrate / 1000) + " kbps" : "mp4"),
+        info: x.bitrate ? Math.round(x.bitrate / 1000) + " kbps" : ""
+      }));
+    if (!variants.length && v.url)
+      variants.push({ url: v.url, label: (v.width && v.height) ? v.width + "×" + v.height : "mp4", info: "" });
+    items.push({ kind: v.type === "gif" ? "gif" : "video", thumb: v.thumbnail_url, variants });
+  }
+  for (const p of (media.photos || [])) {
+    items.push({
+      kind: "photo", thumb: p.url,
+      variants: [{ url: p.url + (p.url.includes("?") ? "&" : "?") + "name=orig",
+                   label: (p.width && p.height) ? p.width + "×" + p.height : "original", info: "" }]
+    });
+  }
+  return { author: t.author?.name || "", handle: t.author?.screen_name || "", text: t.text || "", items };
+}
+
+async function resolveVx(id) {
+  const d = await getJSON("https://api.vxtwitter.com/Twitter/status/" + id);
+  if (!d.tweetID) throw new Error("no tweet");
+  const items = [];
+  for (const m of (d.media_extended || [])) {
+    if (m.type === "video" || m.type === "gif") {
+      items.push({
+        kind: m.type, thumb: m.thumbnail_url,
+        variants: [{ url: m.url,
+                     label: m.size ? m.size.width + "×" + m.size.height : "mp4",
+                     info: m.duration_millis ? (m.duration_millis / 1000).toFixed(1) + "s" : "" }]
+      });
+    } else if (m.type === "image") {
+      items.push({
+        kind: "photo", thumb: m.url,
+        variants: [{ url: m.url + (m.url.includes("?") ? "&" : "?") + "name=orig",
+                     label: m.size ? m.size.width + "×" + m.size.height : "original", info: "" }]
+      });
+    }
+  }
+  return { author: d.user_name || "", handle: d.user_screen_name || "", text: d.text || "", items };
+}
+
+function resFromUrl(u) {
+  const m = u.match(/\/(\d{2,4})x(\d{2,4})\//);
+  return m ? m[1] + "×" + m[2] : null;
+}
+
+/* ---------- UI ---------- */
+
+let busy = false;
+
+async function run(raw) {
+  const id = extractId(raw);
+  if (!id) { setStatus("No tweet ID found in that text.", "err"); return; }
+  if (busy) return;
+  busy = true;
+  $result.innerHTML = "";
+  setStatus("Resolving " + id + " …");
+  let data = null, errs = [];
+  for (const fn of [resolveFx, resolveVx]) {
+    try { data = await fn(id); break; }
+    catch (e) { errs.push(e.message); }
+  }
+  busy = false;
+  if (!data) {
+    setStatus("Couldn’t resolve this post (" + errs.join(" / ") + "). It may be private, deleted or age-gated.", "err");
+    return;
+  }
+  if (!data.items.length) {
+    setStatus("Post found, but it has no downloadable media.", "err");
+    return;
+  }
+  setStatus("");
+  render(data, id);
+}
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+function render(data, id) {
+  const card = el("div", "card");
+  const filament = el("div", "filament");
+  card.appendChild(filament);
+
+  const head = el("div", "tweet");
+  const firstThumb = data.items.find(i => i.thumb)?.thumb;
+  if (firstThumb) {
+    const im = el("img", "thumb");
+    im.src = firstThumb; im.alt = "";
+    im.referrerPolicy = "no-referrer";
+    head.appendChild(im);
+  }
+  const meta = el("div", "meta");
+  const who = el("div", "who", data.author);
+  who.appendChild(el("em", null, "@" + data.handle));
+  meta.appendChild(who);
+  meta.appendChild(el("div", "txt", data.text));
+  head.appendChild(meta);
+  card.appendChild(head);
+
+  const list = el("div", "items");
+  data.items.forEach((item, i) => {
+    const label = item.kind.toUpperCase() + (data.items.length > 1 ? " " + (i + 1) : "");
+    list.appendChild(el("div", "group-label", label));
+    item.variants.forEach((v, vi) => {
+      const ext = item.kind === "photo" ? (v.url.match(/\.(png|webp)/i) ? RegExp.$1 : "jpg") : "mp4";
+      const fname = (data.handle || "x") + "_" + id +
+                    (data.items.length > 1 ? "_" + (i + 1) : "") +
+                    "_" + v.label.replace(/[^\w]/g, "") + "." + ext;
+      const row = el("div", "row");
+      row.appendChild(el("span", "res", v.label));
+      row.appendChild(el("span", "info", v.info));
+      const acts = el("div", "acts");
+      const dl = el("button", vi === 0 ? "primary" : null, "Save");
+      dl.onclick = () => download(v.url, fname, dl, filament);
+      const cp = el("button", null, "Copy URL");
+      cp.onclick = async () => {
+        try { await navigator.clipboard.writeText(v.url); cp.textContent = "Copied"; }
+        catch { window.prompt("Copy:", v.url); }
+        setTimeout(() => cp.textContent = "Copy URL", 1400);
+      };
+      acts.appendChild(dl);
+      acts.appendChild(cp);
+      row.appendChild(acts);
+      list.appendChild(row);
+    });
+  });
+  card.appendChild(list);
+  $result.appendChild(card);
+}
+
+async function download(url, fname, btn, filament) {
+  const old = btn.textContent;
+  btn.disabled = true;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const total = +r.headers.get("Content-Length") || 0;
+    const reader = r.body.getReader();
+    const chunks = [];
+    let got = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      got += value.length;
+      const mb = (got / 1048576).toFixed(1);
+      btn.textContent = total ? Math.round(got / total * 100) + "%" : mb + " MB";
+      if (total) filament.style.width = (got / total * 100) + "%";
+    }
+    const blob = new Blob(chunks, { type: r.headers.get("Content-Type") || "video/mp4" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    btn.textContent = "Saved ✓";
+    setStatus(fname + " · " + (got / 1048576).toFixed(1) + " MB", "ok");
+  } catch (e) {
+    setStatus("Direct save failed (" + e.message + ") — opening in a new tab instead; long-press / right-click to save.", "err");
+    window.open(url, "_blank");
+    btn.textContent = old;
+  } finally {
+    btn.disabled = false;
+    filament.style.width = "0%";
+    setTimeout(() => { if (btn.textContent === "Saved ✓") btn.textContent = old; }, 2500);
+  }
+}
+
+/* ---------- events ---------- */
+
+$go.addEventListener("click", () => run($url.value));
+$url.addEventListener("keydown", e => { if (e.key === "Enter") run($url.value); });
+$url.addEventListener("paste", e => {
+  const text = (e.clipboardData || window.clipboardData).getData("text");
+  if (extractId(text)) setTimeout(() => run(text), 50);
+});
+
+// support ?url= / ?id= query param (handy for iOS Shortcuts / bookmarklets)
+const qp = new URLSearchParams(location.search);
+const seed = qp.get("url") || qp.get("id");
+if (seed) { $url.value = seed; run(seed); }
+</script>
+</body>
+</html>
