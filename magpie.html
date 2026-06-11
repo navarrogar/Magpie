@@ -420,6 +420,16 @@ function render(data, id) {
   $result.appendChild(card);
 }
 
+function anchorSave(blob, fname) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
 async function download(url, fname, btn, filament) {
   const old = btn.textContent;
   btn.disabled = true;
@@ -440,15 +450,31 @@ async function download(url, fname, btn, filament) {
       if (total) filament.style.width = (got / total * 100) + "%";
     }
     const blob = new Blob(chunks, { type: r.headers.get("Content-Type") || "video/mp4" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = fname;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    const file = new File([blob], fname, { type: blob.type });
+    const mb = (got / 1048576).toFixed(1);
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      // iOS/iPadOS: navigator.share needs a fresh tap (user gesture expires
+      // during the fetch), so stage two: button becomes the share trigger.
+      btn.textContent = "Share ▸";
+      btn.disabled = false;
+      btn.onclick = async () => {
+        try {
+          await navigator.share({ files: [file] });
+          btn.textContent = "Saved ✓";
+          setStatus(fname + " · " + mb + " MB", "ok");
+        } catch (e) {
+          if (e.name !== "AbortError") anchorSave(blob, fname);
+        }
+      };
+      setStatus("Downloaded (" + mb + " MB) — tap Share ▸, then “Save Video” or “Save to Files”.", "ok");
+      filament.style.width = "0%";
+      return;
+    }
+
+    anchorSave(blob, fname);
     btn.textContent = "Saved ✓";
-    setStatus(fname + " · " + (got / 1048576).toFixed(1) + " MB", "ok");
+    setStatus(fname + " · " + mb + " MB", "ok");
   } catch (e) {
     setStatus("Direct save failed (" + e.message + ") — opening in a new tab instead; long-press / right-click to save.", "err");
     window.open(url, "_blank");
